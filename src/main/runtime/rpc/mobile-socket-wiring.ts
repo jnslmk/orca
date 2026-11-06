@@ -244,7 +244,10 @@ export class MobileSocketWiring {
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceId)
           // Do not delay e2ee_authenticated for the secure-file rewrite.
-          this.deviceRegistry.updateLastSeenDeferred(device.deviceId)
+          this.deviceRegistry.updateLastSeenDeferred(
+            device.deviceId,
+            channel.transcriptHashB64 ? 'v2' : 'legacy'
+          )
           this.onReady?.(socket)
         },
         onError: (code, reason) => {

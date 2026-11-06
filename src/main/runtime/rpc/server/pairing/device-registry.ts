@@ -1,4 +1,5 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
+import { withDeviceSighting, type DeviceSightingFraming } from './device-sighting'
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
@@ -245,26 +246,25 @@ export class DeviceRegistry extends DeviceRegistryStore {
     return findPrincipalDevice(this.devices, principal)
   }
 
-  updateLastSeen(deviceId: string): void {
+  updateLastSeen(deviceId: string, framing?: DeviceSightingFraming): void {
     // Persist first sighting inline or rotation could delete a paired row still pending on disk.
     this.seenDeviceIds.add(deviceId)
     const seenAt = Date.now()
-    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) => ({
-      ...device,
-      lastSeenAt: seenAt
-    }))
+    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) =>
+      withDeviceSighting(device, seenAt, framing)
+    )
   }
 
   /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.
    * First sighting must persist inline so pending-offer rotation cannot revoke a paired device. */
-  updateLastSeenDeferred(deviceId: string): void {
+  updateLastSeenDeferred(deviceId: string, framing?: DeviceSightingFraming): void {
     const existing = this.getDevice(deviceId)
     if (!existing || existing.lastSeenAt === 0) {
-      return existing ? this.updateLastSeen(deviceId) : undefined
+      return existing ? this.updateLastSeen(deviceId, framing) : undefined
     }
     const seenAt = Date.now()
     this.devices = this.devices.map((device) =>
-      device === existing ? { ...device, lastSeenAt: seenAt } : device
+      device === existing ? withDeviceSighting(device, seenAt, framing) : device
     )
     if (this.pendingLastSeenFlush) {
       return
